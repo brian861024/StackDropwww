@@ -1,0 +1,246 @@
+/* ══════════════════════════════════════════
+   LAYOUT — 全屏滑動容器
+══════════════════════════════════════════ */
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 主滾動容器 */
+#snap-container {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 每個全屏 section */
+.snap-section {
+  height: 100vh;
+  width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 內容寬度限制容器 */
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-8);
+}
+
+.container--narrow {
+  max-width: var(--content-width);
+}
+
+/* ── Section 背景色 ── */
+#section-hero     { background: var(--color-bg); }
+#section-features { background: var(--color-surface); }
+#section-socket   { background: var(--color-bg); }
+#section-parts    { background: var(--color-surface); }
+#section-power    { background: var(--color-bg); }
+#section-result   { background: var(--color-surface); }
+
+/* ── 頂部進度條 ── */
+#progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: 0%;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light));
+  z-index: var(--z-toast);
+  transition: width var(--duration-normal) var(--ease-out);
+  pointer-events: none;
+}
+
+/* ── 固定 Header ── */
+#site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-8);
+  z-index: var(--z-sticky);
+  transition: background var(--duration-normal) var(--ease-out),
+              box-shadow var(--duration-normal) var(--ease-out);
+}
+
+#site-header.scrolled {
+  background: rgba(253, 250, 244, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
+}
+
+.header-logo {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semi);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.header-logo span {
+  color: var(--color-accent);
+}
+
+/* ── 步驟導航點 ── */
+#step-nav {
+  position: fixed;
+  right: var(--space-6);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  z-index: var(--z-sticky);
+}
+
+.step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-spring);
+  position: relative;
+}
+
+.step-dot::before {
+  content: attr(data-label);
+  position: absolute;
+  right: calc(100% + var(--space-3));
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+  pointer-events: none;
+}
+
+.step-dot:hover::before,
+.step-dot.active::before {
+  opacity: 1;
+}
+
+.step-dot.active {
+  width: 8px;
+  height: 24px;
+  background: var(--color-accent);
+  border-radius: var(--radius-full);
+}
+
+.step-dot:hover:not(.active) {
+  background: var(--color-accent-light);
+  transform: scale(1.3);
+}
+
+/* ── 即時瓦數計量器（浮動） ── */
+#watt-meter {
+  position: fixed;
+  right: var(--space-8);
+  bottom: var(--space-8);
+  width: 200px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-overlay);
+  opacity: 0;
+  transform: translateY(20px) scale(0.96);
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-spring);
+  pointer-events: none;
+}
+
+#watt-meter.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.watt-meter__label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  margin-bottom: var(--space-1);
+}
+
+.watt-meter__value {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-light);
+  color: var(--color-text);
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.watt-meter__unit {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+}
+
+.watt-meter__divider {
+  height: 1px;
+  background: var(--color-border-light);
+  margin: var(--space-3) 0;
+}
+
+.watt-meter__sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ── 網格工具 ── */
+.grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.grid--2 { grid-template-columns: repeat(2, 1fr); }
+.grid--3 { grid-template-columns: repeat(3, 1fr); }
+.grid--4 { grid-template-columns: repeat(4, 1fr); }
+
+.flex { display: flex; }
+.flex--center { align-items: center; justify-content: center; }
+.flex--between { align-items: center; justify-content: space-between; }
+.flex--gap-2 { gap: var(--space-2); }
+.flex--gap-4 { gap: var(--space-4); }
+
+/* 捲動條美化 */
+#snap-container::-webkit-scrollbar {
+  width: 4px;
+}
+#snap-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+#snap-container::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+#snap-container::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-light);
+}

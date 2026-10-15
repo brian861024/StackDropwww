@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WattCalc — 電腦功耗計算器</title>
+  <meta name="description" content="精確計算你的電腦組合耗電量，涵蓋 2001 年至今所有主流 CPU / GPU，並估算每月電費。" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/sections.css" />
+</head>
+<body>
+  <!-- 進度條 -->
+  <div id="progress-bar"></div>
+
+  <!-- 固定 Header -->
+  <header id="site-header">
+    <div class="header-logo">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M6 14L6 10M10 14L10 7M14 14L14 11" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Watt<span>Calc</span>
+    </div>
+  </header>
+
+  <!-- 側邊導航點 -->
+  <nav id="step-nav" aria-label="頁面導航">
+    <button class="step-dot active" data-target="section-hero"     data-label="首頁"     aria-label="回到首頁"></button>
+    <button class="step-dot"        data-target="section-features" data-label="功能說明" aria-label="功能說明"></button>
+    <button class="step-dot"        data-target="section-socket"   data-label="選擇世代" aria-label="選擇世代"></button>
+    <button class="step-dot"        data-target="section-parts"    data-label="選擇零件" aria-label="選擇零件"></button>
+    <button class="step-dot"        data-target="section-power"    data-label="電費設定" aria-label="電費設定"></button>
+    <button class="step-dot"        data-target="section-result"   data-label="計算結果" aria-label="計算結果"></button>
+  </nav>
+
+  <!-- 即時瓦數計量器 -->
+  <aside id="watt-meter" aria-live="polite" aria-atomic="true">
+    <div class="watt-meter__label">目前總瓦數</div>
+    <div class="watt-meter__value">
+      <span id="watt-meter-value">0</span>
+      <span class="watt-meter__unit">W</span>
+    </div>
+    <div class="watt-meter__divider"></div>
+    <div class="watt-meter__sub">
+      <span>建議 PSU</span>
+      <span id="watt-meter-psu">—</span>
+    </div>
+  </aside>
+
+  <!-- Toast 提示 -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- ══════════ 主容器 ══════════ -->
+  <main id="snap-container">
+
+    <!-- ── Section 1: Hero ── -->
+    <section id="section-hero" class="snap-section" data-section="0">
+      <div class="hero-bg-deco" aria-hidden="true"></div>
+      <div class="container hero-container">
+        <div class="hero-content">
+          <div class="badge badge--accent anim-fade-in delay-100">2001 → 現在 · 410+ 零組件</div>
+          <h1 class="hero-title">
+            <span class="hero-title-line"><span>算清楚你的</span></span>
+            <span class="hero-title-line"><span>每一瓦</span></span>
+          </h1>
+          <p class="hero-desc anim-fade-up delay-300">
+            從 Pentium 4 到 Ryzen 9，從 GeForce2 到 RTX 4090<br>
+            精確掌握你的組合功耗，找到最佳電供，算出每月電費
+          </p>
+          <div class="hero-actions anim-fade-up delay-400">
+            <button class="btn btn--primary btn--lg" id="hero-cta">
+              開始計算
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 3L8 13M8 13L13 8M8 13L3 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn btn--ghost btn--lg" id="hero-learn">了解功能</button>
+          </div>
+          <div class="hero-stats anim-fade-up delay-500">
+            <div class="hero-stat">
+              <span class="hero-stat__num">15</span>
+              <span class="hero-stat__label">CPU 腳位世代</span>
+            </div>
+            <div class="hero-stat__sep"></div>
+            <div class="hero-stat">
+              <span class="hero-stat__num">410+</span>
+              <span class="hero-stat__label">零組件資料</span>
+            </div>
+            <div class="hero-stat__sep"></div>
+            <div class="hero-stat">
+              <span class="hero-stat__num">2001</span>
+              <span class="hero-stat__label">年起完整收錄</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-visual anim-scale-in delay-200" aria-hidden="true">
+          <div class="hero-card-preview">
+            <div class="hero-card-preview__bar"></div>
+            <div class="hero-card-preview__inner">
+              <div class="hero-card-preview__label">估算峰值功耗</div>
+              <div class="hero-card-preview__number">
+                <span class="hero-card-preview__value">—</span>
+                <span class="hero-card-preview__unit">W</span>
+              </div>
+              <div class="hero-card-preview__divider"></div>
+              <div class="hero-card-preview__row">
+                <span>建議電供</span><span>— W</span>
+              </div>
+              <div class="hero-card-preview__row">
+                <span>每月電費</span><span>— 元</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-scroll-hint anim-fade-in delay-600">
+        <span>向下滑動開始</span>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M10 4L10 16M10 16L15 11M10 16L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ── Section 2: 功能說明 ── -->
+    <section id="section-features" class="snap-section" data-section="1">
+      <div class="container features-container">
+        <div class="section-header anim-fade-up">
+          <p class="section-eyebrow">為什麼選 WattCalc</p>
+          <h2 class="section-title">三步完成精確計算</h2>
+        </div>
+        <div class="features-grid card-stagger">
+          <div class="feature-card card">
+            <div class="feature-card__icon">
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                <rect x="3" y="3" width="22" height="22" rx="4" stroke="var(--color-accent)" stroke-width="1.5"/>
+                <path d="M9 14H19M14 9V19" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3 class="feature-card__title">選擇你的腳位世代</h3>
+            <p class="feature-card__desc">從 2001 年的 Socket 423 到現代 AM5 / LGA1700，涵蓋 15 個主流腳位世代，快速篩選你的 CPU 平台。</p>
+          </div>
+          <div class="feature-card card">
+            <div class="feature-card__icon">
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                <path d="M6 22V6M14 22V12M22 22V17" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3 class="feature-card__title">勾選零組件</h3>
+            <p class="feature-card__desc">CPU、GPU、RAM、儲存裝置、散熱器，即時計算峰值瓦數。410+ 筆真實 TDP 數據，準確不猜測。</p>
+          </div>
+          <div class="feature-card card">
+            <div class="feature-card__icon">
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                <circle cx="14" cy="14" r="10" stroke="var(--color-accent)" stroke-width="1.5"/>
+                <path d="M14 9V14L17 17" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="feature-card__title">查看結果與電費</h3>
+            <p class="feature-card__desc">建議 PSU 瓦數、月費年費試算（台灣電價預設 3.5 元/度），還能一鍵分享你的配置結果。</p>
+          </div>
+        </div>
+        <div class="features-cta anim-fade-up">
+          <button class="btn btn--primary" id="features-cta">立即試算</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Section 3: 腳位選擇 ── -->
+    <section id="section-socket" class="snap-section" data-section="2">
+      <div class="container socket-container">
+        <div class="section-header anim-fade-up">
+          <p class="section-eyebrow">步驟 1 / 3</p>
+          <h2 class="section-title">選擇你的 CPU 腳位世代</h2>
+          <p class="section-desc">選擇你主機板支援的 CPU 腳位，系統將篩選對應的處理器型號</p>
+        </div>
+        <div id="socket-grid" class="socket-grid card-stagger">
+          <!-- 由 JS 動態渲染 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Section 4: 零件選擇 ── -->
+    <section id="section-parts" class="snap-section" data-section="3">
+      <div class="container parts-container">
+        <div class="parts-header">
+          <div class="section-header anim-fade-up">
+            <p class="section-eyebrow">步驟 2 / 3</p>
+            <h2 class="section-title">選擇你的零組件</h2>
+          </div>
+          <div class="search-bar anim-fade-up delay-100">
+            <span class="search-bar__icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <input type="search" id="parts-search" class="form-input" placeholder="搜尋零件名稱…" autocomplete="off" />
+          </div>
+        </div>
+        <div class="category-tabs anim-fade-in delay-200" id="category-tabs" role="tablist">
+          <!-- 由 JS 動態渲染 -->
+        </div>
+        <div id="parts-list" class="parts-list" role="tabpanel">
+          <!-- 由 JS 動態渲染 -->
+        </div>
+        <div class="parts-footer anim-fade-up">
+          <button class="btn btn--ghost" id="parts-back">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            重新選擇世代
+          </button>
+          <button class="btn btn--primary" id="parts-next" disabled>
+            下一步：電費設定
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Section 5: 電費設定 ── -->
+    <section id="section-power" class="snap-section" data-section="4">
+      <div class="container power-container">
+        <div class="section-header anim-fade-up">
+          <p class="section-eyebrow">步驟 3 / 3</p>
+          <h2 class="section-title">電費設定</h2>
+          <p class="section-desc">輸入你的用電環境，計算每月及每年的電費估算</p>
+        </div>
+        <div class="power-form">
+          <div class="power-form__fields">
+            <div class="form-group anim-fade-up delay-100">
+              <label class="form-label" for="price-per-kwh">
+                每度電費
+                <span>（台灣平均約 3.5 元）</span>
+              </label>
+              <div class="form-input-group">
+                <input type="number" id="price-per-kwh" class="form-input" value="3.5" min="0.1" max="50" step="0.1" />
+                <span class="form-input-group__suffix">元 / 度</span>
+              </div>
+            </div>
+            <div class="form-group anim-fade-up delay-200">
+              <label class="form-label" for="hours-per-day">
+                每日使用時數
+                <span>（小時）</span>
+              </label>
+              <div class="form-input-group">
+                <input type="number" id="hours-per-day" class="form-input" value="8" min="1" max="24" step="0.5" />
+                <span class="form-input-group__suffix">小時 / 天</span>
+              </div>
+            </div>
+          </div>
+          <div class="power-preview anim-scale-in delay-300">
+            <div class="power-preview__card">
+              <div class="power-preview__label">電費試算預覽</div>
+              <div class="power-preview__watt">
+                <span id="preview-watt">0</span> W 峰值
+              </div>
+              <div class="power-preview__grid">
+                <div class="power-preview__item">
+                  <span class="power-preview__item-label">每月</span>
+                  <span class="power-preview__item-value" id="preview-monthly">— 元</span>
+                </div>
+                <div class="power-preview__item">
+                  <span class="power-preview__item-label">每年</span>
+                  <span class="power-preview__item-value" id="preview-yearly">— 元</span>
+                </div>
+              </div>
+              <div class="power-preview__note">
+                ＊以峰值功耗估算，實際用電依使用情境而異
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="power-footer anim-fade-up delay-400">
+          <button class="btn btn--ghost" id="power-back">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            回到零件選擇
+          </button>
+          <button class="btn btn--primary btn--lg" id="power-next">
+            查看計算結果
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Section 6: 結果 ── -->
+    <section id="section-result" class="snap-section" data-section="5">
+      <div class="container result-container">
+        <div class="section-header anim-fade-up">
+          <p class="section-eyebrow">計算結果</p>
+          <h2 class="section-title" id="result-title">你的組合功耗分析</h2>
+        </div>
+        <div class="result-layout">
+          <div class="result-main">
+            <div id="result-hero-card" class="result-hero anim-scale-in">
+              <div class="result-hero__label">峰值功耗（估算）</div>
+              <div class="result-hero__number">
+                <span id="result-total-watt">—</span>
+              </div>
+              <div class="result-hero__unit">瓦特 (W)</div>
+              <div class="result-hero__note" id="result-psu-note">建議電供：— W</div>
+            </div>
+            <div id="result-stats" class="result-grid anim-fade-up delay-200">
+              <!-- 由 JS 動態渲染 -->
+            </div>
+          </div>
+          <div class="result-side">
+            <div class="result-side__header">
+              <h3 class="result-side__title">零件明細</h3>
+              <span id="result-parts-count" class="badge badge--accent">0 件</span>
+            </div>
+            <div id="result-breakdown" class="parts-breakdown">
+              <!-- 由 JS 動態渲染 -->
+            </div>
+          </div>
+        </div>
+        <div class="result-actions anim-fade-up delay-400">
+          <button class="btn btn--primary" id="result-share">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 10V12C2 13.1 2.9 14 4 14H12C13.1 14 14 13.1 14 12V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M14 6H5C3.3 6 2 7.3 2 9V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            分享此配置
+          </button>
+          <button class="btn btn--ghost" id="result-restart">
+            重新計算
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /snap-container -->
+
+  <!-- JS 模組 -->
+  <script src="js/data.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/calculator.js"></script>
+  <script src="js/share.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
