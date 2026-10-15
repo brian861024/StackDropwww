@@ -2,360 +2,1099 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WattCalc — 電腦功耗計算器</title>
-  <meta name="description" content="精確計算你的電腦組合耗電量，涵蓋 2001 年至今所有主流 CPU / GPU，並估算每月電費。" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Stack Drop</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #0a0a12;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
 
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    /* ── Canvas ── */
+    #game-canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="css/reset.css" />
-  <link rel="stylesheet" href="css/tokens.css" />
-  <link rel="stylesheet" href="css/layout.css" />
-  <link rel="stylesheet" href="css/components.css" />
-  <link rel="stylesheet" href="css/animations.css" />
-  <link rel="stylesheet" href="css/sections.css" />
+    /* ── HUD ── */
+    #hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 28px 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .hud-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .hud-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+    }
+    .hud-value {
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: -0.02em;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    #combo-display {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #ffd166;
+      opacity: 0;
+      transition: opacity 0.3s;
+      min-height: 18px;
+    }
+
+    /* ── 覆蓋層：開始 / 結束 ── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      z-index: 20;
+      background: rgba(10,10,18,0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: opacity 0.4s;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-title {
+      font-size: clamp(36px, 8vw, 72px);
+      font-weight: 200;
+      letter-spacing: -0.03em;
+      color: #fff;
+      margin-bottom: 6px;
+      text-align: center;
+    }
+    .overlay-title span { color: #ffd166; }
+
+    .overlay-sub {
+      font-size: 14px;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.1em;
+      margin-bottom: 48px;
+      text-align: center;
+    }
+
+    .big-btn {
+      padding: 16px 52px;
+      border-radius: 999px;
+      border: none;
+      background: #ffd166;
+      color: #0a0a12;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      pointer-events: all;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 8px 32px rgba(255,209,102,0.35);
+    }
+    .big-btn:hover { transform: translateY(-3px); box-shadow: 0 14px 40px rgba(255,209,102,0.45); }
+    .big-btn:active { transform: translateY(0); }
+
+    /* 結束畫面專屬 */
+    #end-screen { display: none; }
+    #end-screen.visible { display: flex; }
+
+    .end-score-big {
+      font-size: clamp(64px, 14vw, 120px);
+      font-weight: 200;
+      letter-spacing: -0.04em;
+      color: #fff;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .end-score-label {
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 8px;
+    }
+    .end-best {
+      font-size: 15px;
+      color: #ffd166;
+      letter-spacing: 0.08em;
+      margin-bottom: 48px;
+    }
+    .end-reason {
+      font-size: 13px;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.08em;
+      margin-bottom: 40px;
+    }
+
+    /* 排行榜 */
+    #leaderboard-panel {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: rgba(255,255,255,0.04);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 20px 28px 28px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .lb-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .lb-list {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .lb-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .lb-rank {
+      font-size: 10px;
+      color: rgba(255,255,255,0.25);
+      letter-spacing: 0.1em;
+    }
+    .lb-score {
+      font-size: 20px;
+      font-weight: 300;
+      color: rgba(255,255,255,0.7);
+      font-variant-numeric: tabular-nums;
+    }
+    .lb-item.gold .lb-score { color: #ffd166; font-weight: 600; }
+    .lb-item.silver .lb-score { color: #c0c0c0; }
+    .lb-item.bronze .lb-score { color: #cd7f32; }
+
+    /* 完美提示文字 */
+    #perfect-text {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #ffd166;
+      text-shadow: 0 0 40px rgba(255,209,102,0.6);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 30;
+    }
+
+    /* 切掉提示 */
+    #chop-text {
+      position: fixed;
+      top: 45%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: #ff6b6b;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 30;
+    }
+
+    /* 升級橫幅 */
+    #level-banner {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.7);
+      text-align: center;
+      pointer-events: none;
+      z-index: 35;
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    #level-banner.lb-show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      transition: opacity 0.12s cubic-bezier(0.34,1.56,0.64,1),
+                  transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    #level-banner.lb-hidden {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(1.15);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    .lb-lvl {
+      font-size: clamp(48px, 12vw, 96px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #fff;
+      line-height: 1;
+      text-shadow:
+        0 0 40px rgba(255,209,102,0.9),
+        0 0 80px rgba(255,209,102,0.5);
+      -webkit-text-stroke: 2px rgba(255,209,102,0.6);
+    }
+    .lb-speed {
+      font-size: clamp(16px, 4vw, 24px);
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #ffd166;
+      margin-top: 4px;
+      text-shadow: 0 0 20px rgba(255,209,102,0.8);
+    }
+  </style>
 </head>
 <body>
-  <!-- 進度條 -->
-  <div id="progress-bar"></div>
 
-  <!-- 固定 Header -->
-  <header id="site-header">
-    <div class="header-logo">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/>
-        <path d="M6 14L6 10M10 14L10 7M14 14L14 11" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
-      Watt<span>Calc</span>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-block">
+      <span class="hud-label">Best</span>
+      <span class="hud-value" id="hud-best">0</span>
     </div>
-  </header>
-
-  <!-- 側邊導航點 -->
-  <nav id="step-nav" aria-label="頁面導航">
-    <button class="step-dot active" data-target="section-hero"     data-label="首頁"     aria-label="回到首頁"></button>
-    <button class="step-dot"        data-target="section-features" data-label="功能說明" aria-label="功能說明"></button>
-    <button class="step-dot"        data-target="section-socket"   data-label="選擇世代" aria-label="選擇世代"></button>
-    <button class="step-dot"        data-target="section-parts"    data-label="選擇零件" aria-label="選擇零件"></button>
-    <button class="step-dot"        data-target="section-power"    data-label="電費設定" aria-label="電費設定"></button>
-    <button class="step-dot"        data-target="section-result"   data-label="計算結果" aria-label="計算結果"></button>
-  </nav>
-
-  <!-- 即時瓦數計量器 -->
-  <aside id="watt-meter" aria-live="polite" aria-atomic="true">
-    <div class="watt-meter__label">目前總瓦數</div>
-    <div class="watt-meter__value">
-      <span id="watt-meter-value">0</span>
-      <span class="watt-meter__unit">W</span>
+    <div class="hud-block">
+      <span class="hud-value" id="hud-score">0</span>
+      <span id="combo-display"></span>
     </div>
-    <div class="watt-meter__divider"></div>
-    <div class="watt-meter__sub">
-      <span>建議 PSU</span>
-      <span id="watt-meter-psu">—</span>
+    <div class="hud-block">
+      <span class="hud-label">Level</span>
+      <span class="hud-value" id="hud-level">1</span>
     </div>
-  </aside>
+  </div>
 
-  <!-- Toast 提示 -->
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <!-- 完美 / 切掉文字 -->
+  <div id="perfect-text">PERFECT!</div>
+  <div id="chop-text"></div>
+  <div id="level-banner" class="lb-hidden"></div>
 
-  <!-- ══════════ 主容器 ══════════ -->
-  <main id="snap-container">
+  <!-- 排行榜 -->
+  <div id="leaderboard-panel">
+    <div class="lb-title">本地排行榜</div>
+    <div class="lb-list" id="lb-list"></div>
+  </div>
 
-    <!-- ── Section 1: Hero ── -->
-    <section id="section-hero" class="snap-section" data-section="0">
-      <div class="hero-bg-deco" aria-hidden="true"></div>
-      <div class="container hero-container">
-        <div class="hero-content">
-          <div class="badge badge--accent anim-fade-in delay-100">2001 → 現在 · 410+ 零組件</div>
-          <h1 class="hero-title">
-            <span class="hero-title-line"><span>算清楚你的</span></span>
-            <span class="hero-title-line"><span>每一瓦</span></span>
-          </h1>
-          <p class="hero-desc anim-fade-up delay-300">
-            從 Pentium 4 到 Ryzen 9，從 GeForce2 到 RTX 4090<br>
-            精確掌握你的組合功耗，找到最佳電供，算出每月電費
-          </p>
-          <div class="hero-actions anim-fade-up delay-400">
-            <button class="btn btn--primary btn--lg" id="hero-cta">
-              開始計算
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M8 3L8 13M8 13L13 8M8 13L3 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button class="btn btn--ghost btn--lg" id="hero-learn">了解功能</button>
-          </div>
-          <div class="hero-stats anim-fade-up delay-500">
-            <div class="hero-stat">
-              <span class="hero-stat__num">15</span>
-              <span class="hero-stat__label">CPU 腳位世代</span>
-            </div>
-            <div class="hero-stat__sep"></div>
-            <div class="hero-stat">
-              <span class="hero-stat__num">410+</span>
-              <span class="hero-stat__label">零組件資料</span>
-            </div>
-            <div class="hero-stat__sep"></div>
-            <div class="hero-stat">
-              <span class="hero-stat__num">2001</span>
-              <span class="hero-stat__label">年起完整收錄</span>
-            </div>
-          </div>
-        </div>
-        <div class="hero-visual anim-scale-in delay-200" aria-hidden="true">
-          <div class="hero-card-preview">
-            <div class="hero-card-preview__bar"></div>
-            <div class="hero-card-preview__inner">
-              <div class="hero-card-preview__label">估算峰值功耗</div>
-              <div class="hero-card-preview__number">
-                <span class="hero-card-preview__value">—</span>
-                <span class="hero-card-preview__unit">W</span>
-              </div>
-              <div class="hero-card-preview__divider"></div>
-              <div class="hero-card-preview__row">
-                <span>建議電供</span><span>— W</span>
-              </div>
-              <div class="hero-card-preview__row">
-                <span>每月電費</span><span>— 元</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="hero-scroll-hint anim-fade-in delay-600">
-        <span>向下滑動開始</span>
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M10 4L10 16M10 16L15 11M10 16L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-    </section>
+  <!-- 開始畫面 -->
+  <div class="overlay" id="start-screen">
+    <h1 class="overlay-title">Stack<span>Drop</span></h1>
+    <p class="overlay-sub">點擊或按空白鍵，精準疊上去</p>
+    <button class="big-btn" id="btn-start">開始遊戲</button>
+  </div>
 
-    <!-- ── Section 2: 功能說明 ── -->
-    <section id="section-features" class="snap-section" data-section="1">
-      <div class="container features-container">
-        <div class="section-header anim-fade-up">
-          <p class="section-eyebrow">為什麼選 WattCalc</p>
-          <h2 class="section-title">三步完成精確計算</h2>
-        </div>
-        <div class="features-grid card-stagger">
-          <div class="feature-card card">
-            <div class="feature-card__icon">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                <rect x="3" y="3" width="22" height="22" rx="4" stroke="var(--color-accent)" stroke-width="1.5"/>
-                <path d="M9 14H19M14 9V19" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3 class="feature-card__title">選擇你的腳位世代</h3>
-            <p class="feature-card__desc">從 2001 年的 Socket 423 到現代 AM5 / LGA1700，涵蓋 15 個主流腳位世代，快速篩選你的 CPU 平台。</p>
-          </div>
-          <div class="feature-card card">
-            <div class="feature-card__icon">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                <path d="M6 22V6M14 22V12M22 22V17" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3 class="feature-card__title">勾選零組件</h3>
-            <p class="feature-card__desc">CPU、GPU、RAM、儲存裝置、散熱器，即時計算峰值瓦數。410+ 筆真實 TDP 數據，準確不猜測。</p>
-          </div>
-          <div class="feature-card card">
-            <div class="feature-card__icon">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                <circle cx="14" cy="14" r="10" stroke="var(--color-accent)" stroke-width="1.5"/>
-                <path d="M14 9V14L17 17" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3 class="feature-card__title">查看結果與電費</h3>
-            <p class="feature-card__desc">建議 PSU 瓦數、月費年費試算（台灣電價預設 3.5 元/度），還能一鍵分享你的配置結果。</p>
-          </div>
-        </div>
-        <div class="features-cta anim-fade-up">
-          <button class="btn btn--primary" id="features-cta">立即試算</button>
-        </div>
-      </div>
-    </section>
+  <!-- 結束畫面 -->
+  <div class="overlay hidden" id="end-screen">
+    <div class="end-score-big" id="end-score">0</div>
+    <div class="end-score-label">分數</div>
+    <div class="end-best" id="end-best-text"></div>
+    <div class="end-reason" id="end-reason"></div>
+    <button class="big-btn" id="btn-restart">再玩一次</button>
+  </div>
 
-    <!-- ── Section 3: 腳位選擇 ── -->
-    <section id="section-socket" class="snap-section" data-section="2">
-      <div class="container socket-container">
-        <div class="section-header anim-fade-up">
-          <p class="section-eyebrow">步驟 1 / 3</p>
-          <h2 class="section-title">選擇你的 CPU 腳位世代</h2>
-          <p class="section-desc">選擇你主機板支援的 CPU 腳位，系統將篩選對應的處理器型號</p>
-        </div>
-        <div id="socket-grid" class="socket-grid card-stagger">
-          <!-- 由 JS 動態渲染 -->
-        </div>
-      </div>
-    </section>
+  <script>
+  (() => {
+    'use strict';
 
-    <!-- ── Section 4: 零件選擇 ── -->
-    <section id="section-parts" class="snap-section" data-section="3">
-      <div class="container parts-container">
-        <div class="parts-header">
-          <div class="section-header anim-fade-up">
-            <p class="section-eyebrow">步驟 2 / 3</p>
-            <h2 class="section-title">選擇你的零組件</h2>
-          </div>
-          <div class="search-bar anim-fade-up delay-100">
-            <span class="search-bar__icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </span>
-            <input type="search" id="parts-search" class="form-input" placeholder="搜尋零件名稱…" autocomplete="off" />
-          </div>
-        </div>
-        <div class="category-tabs anim-fade-in delay-200" id="category-tabs" role="tablist">
-          <!-- 由 JS 動態渲染 -->
-        </div>
-        <div id="parts-list" class="parts-list" role="tabpanel">
-          <!-- 由 JS 動態渲染 -->
-        </div>
-        <div class="parts-footer anim-fade-up">
-          <button class="btn btn--ghost" id="parts-back">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            重新選擇世代
-          </button>
-          <button class="btn btn--primary" id="parts-next" disabled>
-            下一步：電費設定
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </section>
+    /* ══════════════════════════════════════════
+       常數 & 設定
+    ══════════════════════════════════════════ */
+    const BLOCK_H          = 28;       // 積木高度（px）
+    const INIT_W           = 220;      // 初始積木寬度
+    const SWING_BASE       = 5.5;      // 初始擺動速度（第 1 關）
+    // 速度公式：第 n 關速度 = BASE + sum(加速量)
+    // 第1→2關 +1.0，第2→3關 +1.0，第3→4關 +1.5，第4→5關 +2.0，之後每關再+0.5
+    const SWING_MAX        = 999;      // 不設上限，讓它飛
+    const LEVEL_EVERY      = 4;        // 每幾塊升一關
+    const PERFECT_THRESH   = 2;        // 完美判定（px，極緊）
+    const DROP_SPEED       = 38;       // 積木掉落速度
+    const MIN_W            = 14;       // 最小寬度
+    const TOWER_VISIBLE    = 60;       // 足夠大，由攝影機控制可見範圍
+    const COLORS = [
+      '#FF6B6B','#FF8E53','#FFD166','#06D6A0',
+      '#118AB2','#A78BFA','#F472B6','#34D399',
+      '#60A5FA','#FBBF24','#F87171','#4ADE80',
+    ];
 
-    <!-- ── Section 5: 電費設定 ── -->
-    <section id="section-power" class="snap-section" data-section="4">
-      <div class="container power-container">
-        <div class="section-header anim-fade-up">
-          <p class="section-eyebrow">步驟 3 / 3</p>
-          <h2 class="section-title">電費設定</h2>
-          <p class="section-desc">輸入你的用電環境，計算每月及每年的電費估算</p>
-        </div>
-        <div class="power-form">
-          <div class="power-form__fields">
-            <div class="form-group anim-fade-up delay-100">
-              <label class="form-label" for="price-per-kwh">
-                每度電費
-                <span>（台灣平均約 3.5 元）</span>
-              </label>
-              <div class="form-input-group">
-                <input type="number" id="price-per-kwh" class="form-input" value="3.5" min="0.1" max="50" step="0.1" />
-                <span class="form-input-group__suffix">元 / 度</span>
-              </div>
-            </div>
-            <div class="form-group anim-fade-up delay-200">
-              <label class="form-label" for="hours-per-day">
-                每日使用時數
-                <span>（小時）</span>
-              </label>
-              <div class="form-input-group">
-                <input type="number" id="hours-per-day" class="form-input" value="8" min="1" max="24" step="0.5" />
-                <span class="form-input-group__suffix">小時 / 天</span>
-              </div>
-            </div>
-          </div>
-          <div class="power-preview anim-scale-in delay-300">
-            <div class="power-preview__card">
-              <div class="power-preview__label">電費試算預覽</div>
-              <div class="power-preview__watt">
-                <span id="preview-watt">0</span> W 峰值
-              </div>
-              <div class="power-preview__grid">
-                <div class="power-preview__item">
-                  <span class="power-preview__item-label">每月</span>
-                  <span class="power-preview__item-value" id="preview-monthly">— 元</span>
-                </div>
-                <div class="power-preview__item">
-                  <span class="power-preview__item-label">每年</span>
-                  <span class="power-preview__item-value" id="preview-yearly">— 元</span>
-                </div>
-              </div>
-              <div class="power-preview__note">
-                ＊以峰值功耗估算，實際用電依使用情境而異
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="power-footer anim-fade-up delay-400">
-          <button class="btn btn--ghost" id="power-back">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            回到零件選擇
-          </button>
-          <button class="btn btn--primary btn--lg" id="power-next">
-            查看計算結果
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </section>
+    /* ══════════════════════════════════════════
+       Canvas 設定
+    ══════════════════════════════════════════ */
+    const canvas = document.getElementById('game-canvas');
+    const ctx    = canvas.getContext('2d');
+    let W = 0, H = 0;
 
-    <!-- ── Section 6: 結果 ── -->
-    <section id="section-result" class="snap-section" data-section="5">
-      <div class="container result-container">
-        <div class="section-header anim-fade-up">
-          <p class="section-eyebrow">計算結果</p>
-          <h2 class="section-title" id="result-title">你的組合功耗分析</h2>
-        </div>
-        <div class="result-layout">
-          <div class="result-main">
-            <div id="result-hero-card" class="result-hero anim-scale-in">
-              <div class="result-hero__label">峰值功耗（估算）</div>
-              <div class="result-hero__number">
-                <span id="result-total-watt">—</span>
-              </div>
-              <div class="result-hero__unit">瓦特 (W)</div>
-              <div class="result-hero__note" id="result-psu-note">建議電供：— W</div>
-            </div>
-            <div id="result-stats" class="result-grid anim-fade-up delay-200">
-              <!-- 由 JS 動態渲染 -->
-            </div>
-          </div>
-          <div class="result-side">
-            <div class="result-side__header">
-              <h3 class="result-side__title">零件明細</h3>
-              <span id="result-parts-count" class="badge badge--accent">0 件</span>
-            </div>
-            <div id="result-breakdown" class="parts-breakdown">
-              <!-- 由 JS 動態渲染 -->
-            </div>
-          </div>
-        </div>
-        <div class="result-actions anim-fade-up delay-400">
-          <button class="btn btn--primary" id="result-share">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M2 10V12C2 13.1 2.9 14 4 14H12C13.1 14 14 13.1 14 12V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M14 6H5C3.3 6 2 7.3 2 9V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            分享此配置
-          </button>
-          <button class="btn btn--ghost" id="result-restart">
-            重新計算
-          </button>
-        </div>
-      </div>
-    </section>
+    function resize() {
+      W = canvas.width  = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
 
-  </main><!-- /snap-container -->
+    /* ══════════════════════════════════════════
+       本地排行榜
+    ══════════════════════════════════════════ */
+    const LB_KEY = 'stackdrop_scores';
+    function loadScores() {
+      try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; }
+      catch { return []; }
+    }
+    function saveScore(s) {
+      const scores = loadScores();
+      scores.push(s);
+      scores.sort((a,b) => b - a);
+      const top = scores.slice(0, 10);
+      localStorage.setItem(LB_KEY, JSON.stringify(top));
+      return top;
+    }
+    function getBest() {
+      const scores = loadScores();
+      return scores.length ? scores[0] : 0;
+    }
+    function renderLeaderboard() {
+      const list = document.getElementById('lb-list');
+      const scores = loadScores().slice(0, 5);
+      const classes = ['gold','silver','bronze','',''];
+      list.innerHTML = scores.map((s,i) => `
+        <div class="lb-item ${classes[i] || ''}">
+          <span class="lb-rank">#${i+1}</span>
+          <span class="lb-score">${s}</span>
+        </div>
+      `).join('') || '<span style="color:rgba(255,255,255,0.2);font-size:13px;">尚無紀錄</span>';
+    }
 
-  <!-- JS 模組 -->
-  <script src="js/data.js"></script>
-  <script src="js/state.js"></script>
-  <script src="js/calculator.js"></script>
-  <script src="js/share.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/main.js"></script>
+    /* ══════════════════════════════════════════
+       遊戲狀態
+    ══════════════════════════════════════════ */
+    let state       = 'idle';  // idle | playing | dropping | ended
+    let score       = 0;
+    let level       = 1;
+    let combo       = 0;
+    let perfectCombo = 0;
+
+    // 已落定的塔（陣列，由下往上）
+    let tower = [];     // [{ x, w, colorIdx }]
+
+    // 當前擺動的積木
+    let swing = { x: 0, w: 0, dir: 1, speed: 0, colorIdx: 0 };
+
+    // 正在掉落的積木（動畫用）
+    let falling = null;  // { x, w, colorIdx, y, targetY }
+
+    // 被切掉的碎塊（飛出動畫）
+    let debris = [];
+
+    // 畫面偏移（塔往上長時往上推）
+    let cameraY = 0;
+    let targetCameraY = 0;
+
+    // 粒子特效
+    let particles = [];
+
+    // combo 計時器
+    let comboTimer = 0;
+
+    // 升級特效
+    let levelUpFlash   = 0;   // flash 剩餘幀數
+    let levelUpRings   = [];  // 擴散圓環
+    let levelUpBanners = [];  // 橫幅文字粒子
+    let prevLevel      = 1;   // 上一幀的 level，用於偵測升級
+
+    /* ══════════════════════════════════════════
+       初始化一局
+    ══════════════════════════════════════════ */
+    function initGame() {
+      score        = 0;
+      level        = 1;
+      combo        = 0;
+      perfectCombo = 0;
+      tower        = [];
+      falling      = null;
+      debris       = [];
+      particles    = [];
+      cameraY      = 0;
+      targetCameraY = 0;
+      comboTimer   = 0;
+      levelUpFlash = 0;
+      levelUpRings = [];
+      prevLevel    = 1;
+      document.getElementById('level-banner').className = 'lb-hidden';
+
+      // 底座：固定、稍寬
+      const baseW = INIT_W + 40;
+      tower.push({ x: W / 2 - baseW / 2, w: baseW, colorIdx: 0 });
+
+      // 更新 HUD
+      updateHUD();
+      renderLeaderboard();
+
+      // 準備第一個擺動積木
+      spawnSwing();
+    }
+
+    /* ══════════════════════════════════════════
+       生成擺動積木
+    ══════════════════════════════════════════ */
+    // 累進速度計算：第 n 關速度
+    function calcSpeed(lvl) {
+      let spd = SWING_BASE;
+      for (let i = 2; i <= lvl; i++) {
+        // 加速量：前兩次升關各+1.0，之後每次多+0.5
+        const inc = i <= 3 ? 1.0 : 1.0 + (i - 3) * 0.5;
+        spd += inc;
+      }
+      return spd;
+    }
+
+    function spawnSwing() {
+      const top     = tower[tower.length - 1];
+      const w       = top.w;
+      const speed   = calcSpeed(level);
+      const cIdx    = (tower.length) % COLORS.length;
+
+      // 從左或右邊進入
+      const startFromLeft = Math.random() < 0.5;
+      swing = {
+        x:        startFromLeft ? -w : W,
+        w:        w,
+        dir:      startFromLeft ? 1 : -1,
+        speed:    speed,
+        colorIdx: cIdx,
+      };
+      state = 'playing';
+    }
+
+    /* ══════════════════════════════════════════
+       落下（玩家點擊時）
+    ══════════════════════════════════════════ */
+    function drop() {
+      if (state !== 'playing') return;
+      state = 'dropping';
+
+      const top      = tower[tower.length - 1];
+      const sx       = swing.x;
+      const sw       = swing.w;
+      const tx       = top.x;
+      const tw       = top.w;
+
+      // 重疊計算
+      const overlapLeft  = Math.max(sx, tx);
+      const overlapRight = Math.min(sx + sw, tx + tw);
+      const overlap      = overlapRight - overlapLeft;
+
+      if (overlap <= 0) {
+        // 完全沒疊到 → 遊戲結束（直接掉落動畫）
+        falling = {
+          x: sx, w: sw,
+          colorIdx: swing.colorIdx,
+          y: getTowerTopY() - BLOCK_H,
+          targetY: H + 100,
+          isFail: true,
+        };
+        setTimeout(() => endGame('完全沒疊到！'), 600);
+        return;
+      }
+
+      // 完美判定
+      const isPerfect = Math.abs(sx - tx) <= PERFECT_THRESH && Math.abs((sx+sw) - (tx+tw)) <= PERFECT_THRESH;
+
+      let newX, newW;
+      if (isPerfect) {
+        // 完美：保持上層寬度
+        newX  = tx;
+        newW  = tw;
+        combo++;
+        perfectCombo++;
+        score += 10 + combo * 3;
+        showPerfect();
+        spawnParticles(newX + newW/2, getTowerTopY() - BLOCK_H, COLORS[swing.colorIdx], 20);
+      } else {
+        newX  = overlapLeft;
+        newW  = overlap;
+        combo = 0;
+        perfectCombo = 0;
+        score += 10;
+        // 切掉的碎塊
+        if (sx < tx) {
+          spawnDebris(sx, sw - overlap, swing.colorIdx, getTowerTopY() - BLOCK_H, 'left');
+          showChop(`-${Math.round(sw - overlap)}px`);
+        } else {
+          spawnDebris(sx + overlap, sw - overlap, swing.colorIdx, getTowerTopY() - BLOCK_H, 'right');
+          showChop(`-${Math.round(sw - overlap)}px`);
+        }
+        spawnParticles(newX + newW/2, getTowerTopY() - BLOCK_H, COLORS[swing.colorIdx], 8);
+      }
+
+      // 落定的積木
+      falling = {
+        x: newX, w: newW,
+        colorIdx: swing.colorIdx,
+        y: getTowerTopY() - BLOCK_H * 1.5,  // 從稍高處落下
+        targetY: getTowerTopY() - BLOCK_H,
+        isPerfect,
+      };
+
+      // 寬度太小 → 結束
+      if (newW < MIN_W) {
+        falling.isFail = true;
+        setTimeout(() => endGame('積木太小了！'), 400);
+      }
+
+      // 更新 level，偵測升級
+      const newLevel = Math.floor(tower.length / LEVEL_EVERY) + 1;
+      if (newLevel > level) {
+        level = newLevel;
+        triggerLevelUp(level);
+      } else {
+        level = newLevel;
+      }
+      updateHUD();
+    }
+
+    /* ══════════════════════════════════════════
+       積木落定後加入塔
+    ══════════════════════════════════════════ */
+    function landBlock() {
+      tower.push({ x: falling.x, w: falling.w, colorIdx: falling.colorIdx });
+
+      // 攝影機：塔頂永遠保持在畫面 30% 處
+      const desiredTopY  = H * 0.30;
+      const actualTopY   = H * 0.55 - tower.length * BLOCK_H;
+      targetCameraY      = desiredTopY - actualTopY;
+      if (targetCameraY < 0) targetCameraY = 0; // 塔還短時不偏移
+
+      falling = null;
+
+      if (state !== 'ended') {
+        spawnSwing();
+      }
+    }
+
+    /* ══════════════════════════════════════════
+       取得塔頂 Y 座標（畫面座標）
+    ══════════════════════════════════════════ */
+    function getTowerTopY() {
+      return H * 0.55 - tower.length * BLOCK_H + cameraY;
+    }
+
+    // 攝影機將任意塔索引換算成畫面 Y
+    function getBlockY(idx) {
+      return H * 0.55 - (idx + 1) * BLOCK_H + cameraY;
+    }
+
+    /* ══════════════════════════════════════════
+       結束
+    ══════════════════════════════════════════ */
+    function endGame(reason) {
+      state = 'ended';
+      const tops = saveScore(score);
+      const best = tops[0] || score;
+      const isNewBest = tops[0] === score && tops.filter(s => s === score).length === 1;
+
+      document.getElementById('end-score').textContent = score;
+      document.getElementById('end-reason').textContent = reason;
+      document.getElementById('end-best-text').textContent =
+        isNewBest ? '🏆 新紀錄！' : `最高分：${best}`;
+
+      document.getElementById('hud-best').textContent = best;
+
+      const endScreen = document.getElementById('end-screen');
+      endScreen.classList.remove('hidden');
+      endScreen.classList.add('visible');
+
+      renderLeaderboard();
+    }
+
+    /* ══════════════════════════════════════════
+       升級特效
+    ══════════════════════════════════════════ */
+    function triggerLevelUp(lvl) {
+      // 1. 畫面 flash
+      levelUpFlash = 18;
+
+      // 2. 爆炸圓環（3 層）
+      const cx = W / 2;
+      const cy = getTowerTopY();
+      for (let i = 0; i < 3; i++) {
+        levelUpRings.push({
+          x: cx, y: cy,
+          r: 0, maxR: Math.max(W, H) * 0.8,
+          alpha: 0.7 - i * 0.15,
+          speed: 14 + i * 8,
+          color: COLORS[(lvl + i) % COLORS.length],
+        });
+      }
+
+      // 3. 爆炸粒子（大量）
+      for (let i = 0; i < 60; i++) {
+        const angle = (i / 60) * Math.PI * 2 + Math.random() * 0.3;
+        const spd   = 3 + Math.random() * 9;
+        particles.push({
+          x: cx, y: cy,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd - 3,
+          color: COLORS[Math.floor(Math.random() * COLORS.length)],
+          size: 3 + Math.random() * 6,
+          alpha: 1,
+          gravity: 0.22,
+          life: 0.975 + Math.random() * 0.01,
+        });
+      }
+
+      // 4. HTML 升級橫幅
+      showLevelBanner(lvl);
+
+      // 5. 震動（若支援）
+      if (navigator.vibrate) navigator.vibrate([40, 20, 40]);
+    }
+
+    // 升級 HTML 橫幅
+    let bannerTimer;
+    function showLevelBanner(lvl) {
+      const spd = calcSpeed(lvl).toFixed(1);
+      const el  = document.getElementById('level-banner');
+      el.innerHTML = `
+        <div class="lb-lvl">LEVEL ${lvl}</div>
+        <div class="lb-speed">速度 ×${spd}</div>
+      `;
+      el.classList.remove('lb-hidden');
+      el.classList.add('lb-show');
+      clearTimeout(bannerTimer);
+      bannerTimer = setTimeout(() => {
+        el.classList.remove('lb-show');
+        el.classList.add('lb-hidden');
+      }, 1400);
+    }
+
+    /* ══════════════════════════════════════════
+       碎塊飛出
+    ══════════════════════════════════════════ */
+    function spawnDebris(x, w, colorIdx, y, side) {
+      const vx = side === 'left' ? -4 - Math.random() * 3 : 4 + Math.random() * 3;
+      debris.push({ x, w, colorIdx, y, vx, vy: -2, gravity: 0.4, alpha: 1 });
+    }
+
+    /* ══════════════════════════════════════════
+       粒子特效
+    ══════════════════════════════════════════ */
+    function spawnParticles(cx, cy, color, count) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 4;
+        particles.push({
+          x: cx, y: cy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 2,
+          color,
+          size: 2 + Math.random() * 4,
+          alpha: 1,
+          gravity: 0.18,
+          life: 0.98 + Math.random() * 0.015,
+        });
+      }
+    }
+
+    /* ══════════════════════════════════════════
+       文字提示
+    ══════════════════════════════════════════ */
+    let perfectTimer;
+    function showPerfect() {
+      const el = document.getElementById('perfect-text');
+      el.style.opacity = '1';
+      el.style.transform = 'translate(-50%, -50%) scale(1.3)';
+      el.style.transition = 'none';
+      requestAnimationFrame(() => {
+        el.style.transition = 'opacity 0.7s, transform 0.7s';
+        el.style.transform  = 'translate(-50%, calc(-50% - 16px)) scale(1)';
+      });
+      clearTimeout(perfectTimer);
+      perfectTimer = setTimeout(() => { el.style.opacity = '0'; }, 900);
+    }
+
+    let chopTimer;
+    function showChop(text) {
+      const el = document.getElementById('chop-text');
+      el.textContent = text;
+      el.style.opacity = '1';
+      el.style.transform = 'translate(-50%, -50%)';
+      el.style.transition = 'none';
+      requestAnimationFrame(() => {
+        el.style.transition = 'opacity 0.6s, transform 0.6s';
+        el.style.transform  = 'translate(-50%, calc(-50% - 24px))';
+        el.style.opacity    = '0';
+      });
+      clearTimeout(chopTimer);
+      chopTimer = setTimeout(() => {
+        el.style.opacity = '0';
+      }, 600);
+    }
+
+    /* ══════════════════════════════════════════
+       HUD 更新
+    ══════════════════════════════════════════ */
+    function updateHUD() {
+      document.getElementById('hud-score').textContent = score;
+      document.getElementById('hud-level').textContent = level;
+      document.getElementById('hud-best').textContent  = getBest();
+
+      const comboEl = document.getElementById('combo-display');
+      if (combo >= 2) {
+        comboEl.style.opacity = '1';
+        comboEl.textContent   = combo + 'x combo';
+        comboTimer = 90;
+      } else {
+        comboEl.style.opacity = '0';
+      }
+    }
+
+    /* ══════════════════════════════════════════
+       輸入事件
+    ══════════════════════════════════════════ */
+    function handleInput() {
+      if (state === 'playing') drop();
+    }
+
+    canvas.addEventListener('click', handleInput);
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); handleInput(); }
+    });
+    document.addEventListener('touchstart', e => {
+      if (state === 'playing') { e.preventDefault(); drop(); }
+    }, { passive: false });
+
+    document.getElementById('btn-start').addEventListener('click', () => {
+      document.getElementById('start-screen').classList.add('hidden');
+      initGame();
+    });
+
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      const endScreen = document.getElementById('end-screen');
+      endScreen.classList.add('hidden');
+      endScreen.classList.remove('visible');
+      initGame();
+    });
+
+    /* ══════════════════════════════════════════
+       渲染輔助
+    ══════════════════════════════════════════ */
+    // 漸層快取
+    const gradCache = {};
+    function getGrad(color, x, y, w, h) {
+      const key = color + '|' + w;
+      if (!gradCache[key]) {
+        // 每個顏色的漸層
+        const g = ctx.createLinearGradient(0, 0, 0, h * 2);
+        g.addColorStop(0, lighten(color, 30));
+        g.addColorStop(1, darken(color, 20));
+        gradCache[key] = g;
+      }
+      return gradCache[key];
+    }
+
+    function lighten(hex, amt) {
+      const r = Math.min(255, parseInt(hex.slice(1,3),16) + amt);
+      const g = Math.min(255, parseInt(hex.slice(3,5),16) + amt);
+      const b = Math.min(255, parseInt(hex.slice(5,7),16) + amt);
+      return `rgb(${r},${g},${b})`;
+    }
+    function darken(hex, amt) {
+      const r = Math.max(0, parseInt(hex.slice(1,3),16) - amt);
+      const g = Math.max(0, parseInt(hex.slice(3,5),16) - amt);
+      const b = Math.max(0, parseInt(hex.slice(5,7),16) - amt);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    function drawBlock(x, y, w, h, colorIdx, alpha = 1, shadow = true) {
+      const color = COLORS[colorIdx % COLORS.length];
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // 主體
+      const grad = ctx.createLinearGradient(x, y, x, y + h);
+      grad.addColorStop(0, lighten(color, 40));
+      grad.addColorStop(0.5, color);
+      grad.addColorStop(1, darken(color, 30));
+      ctx.fillStyle = grad;
+
+      // 圓角
+      const r = Math.min(6, h * 0.3, w * 0.15);
+      roundRect(ctx, x, y, w, h, r);
+      ctx.fill();
+
+      // 高光（頂部）
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      roundRect(ctx, x + 2, y + 2, w - 4, h * 0.35, r);
+      ctx.fill();
+
+      // 外邊框
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, x, y, w, h, r);
+      ctx.stroke();
+
+      // 陰影投射（在積木下方畫細線）
+      if (shadow) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(x + 4, y + h, w - 8, 3);
+      }
+
+      ctx.restore();
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    /* ══════════════════════════════════════════
+       主渲染循環
+    ══════════════════════════════════════════ */
+    let last = 0;
+    let swingX = 0;  // 用於內插
+
+    function loop(ts) {
+      requestAnimationFrame(loop);
+      const dt = Math.min((ts - last) / 16.67, 3); // normalized dt
+      last = ts;
+
+      // 清空
+      ctx.clearRect(0, 0, W, H);
+
+      // 背景漸層
+      drawBackground();
+
+      if (state === 'idle' || state === 'ended') {
+        renderLeaderboard();
+        return;
+      }
+
+      // 攝影機內插（稍快一點讓積木不會跑出畫面）
+      cameraY += (targetCameraY - cameraY) * 0.12;
+
+      // 更新 swing
+      if (state === 'playing') {
+        swing.x += swing.dir * swing.speed * dt;
+        // 邊界反彈
+        if (swing.x + swing.w > W + swing.w * 0.5) {
+          swing.dir = -1;
+          swing.x   = W + swing.w * 0.5 - swing.w;
+        } else if (swing.x < -swing.w * 0.5) {
+          swing.dir = 1;
+          swing.x   = -swing.w * 0.5;
+        }
+      }
+
+      // 更新 falling
+      if (falling) {
+        if (!falling.isFail) {
+          falling.y += (falling.targetY - falling.y) * 0.42;
+          if (Math.abs(falling.y - falling.targetY) < 0.5) {
+            falling.y = falling.targetY;
+            if (state !== 'ended') landBlock();
+          }
+        } else {
+          falling.y += DROP_SPEED * dt;
+        }
+      }
+
+      // 更新碎塊
+      debris = debris.filter(d => d.alpha > 0.02);
+      debris.forEach(d => {
+        d.x    += d.vx * dt;
+        d.y    += d.vy * dt;
+        d.vy   += d.gravity * dt;
+        d.alpha *= 0.92;
+        d.vx   *= 0.98;
+      });
+
+      // 更新粒子
+      particles = particles.filter(p => p.alpha > 0.02);
+      particles.forEach(p => {
+        p.x    += p.vx * dt;
+        p.y    += p.vy * dt;
+        p.vy   += p.gravity * dt;
+        p.alpha *= p.life;
+      });
+
+      // combo timer
+      if (comboTimer > 0) {
+        comboTimer -= dt;
+        if (comboTimer <= 0) {
+          document.getElementById('combo-display').style.opacity = '0';
+        }
+      }
+
+      // ── 繪製塔（只繪製畫面內可見部分）──
+      for (let i = 0; i < tower.length; i++) {
+        const y = getBlockY(i);
+        if (y > H + BLOCK_H) continue;   // 在畫面下方，跳過
+        if (y < -BLOCK_H * 2) continue;  // 在畫面上方，跳過
+        const blk = tower[i];
+        drawBlock(blk.x, y, blk.w, BLOCK_H, blk.colorIdx, 1, i === tower.length - 1);
+      }
+
+      // ── 擺動積木 ──
+      if (state === 'playing') {
+        const swingY = getTowerTopY() - BLOCK_H * 1.8;
+        drawTrackHint(swing.x, swingY, swing.w);
+        drawBlock(swing.x, swingY, swing.w, BLOCK_H, swing.colorIdx);
+        drawAlignGuide(swing, tower[tower.length - 1]);
+      }
+
+      // ── 掉落積木 ──
+      if (falling) {
+        drawBlock(falling.x, falling.y, falling.w, BLOCK_H, falling.colorIdx);
+      }
+
+      // ── 碎塊 ──
+      debris.forEach(d => {
+        drawBlock(d.x, d.y, d.w, BLOCK_H, d.colorIdx, d.alpha, false);
+      });
+
+      // ── 粒子 ──
+      particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle   = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // ── 升級圓環 ──
+      levelUpRings = levelUpRings.filter(r => r.alpha > 0.01);
+      levelUpRings.forEach(r => {
+        r.r    += r.speed * dt;
+        r.alpha *= 0.88;
+        ctx.save();
+        ctx.globalAlpha  = r.alpha;
+        ctx.strokeStyle  = r.color;
+        ctx.lineWidth    = 3;
+        ctx.shadowColor  = r.color;
+        ctx.shadowBlur   = 20;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // ── 升級 Flash 覆蓋 ──
+      if (levelUpFlash > 0) {
+        const alpha = (levelUpFlash / 18) * 0.35;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle   = '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+        levelUpFlash -= dt;
+      }
+
+      // 更新 HUD 分數
+      document.getElementById('hud-score').textContent = score;
+    }
+
+    /* ── 背景 ── */
+    function drawBackground() {
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, '#0d0d1a');
+      grad.addColorStop(1, '#0a0a12');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // 格線裝飾（極淡）
+      ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+      ctx.lineWidth = 1;
+      const gridSize = 60;
+      for (let x = 0; x < W; x += gridSize) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += gridSize) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+    }
+
+    /* ── 擺動軌跡提示 ── */
+    function drawTrackHint(sx, sy, sw) {
+      ctx.save();
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle   = '#ffffff';
+      ctx.fillRect(0, sy, W, BLOCK_H);
+      ctx.restore();
+    }
+
+    /* ── 對齊輔助線 ── */
+    function drawAlignGuide(swingBlk, topBlk) {
+      if (!topBlk) return;
+      const swingCX = swingBlk.x + swingBlk.w / 2;
+      const topCX   = topBlk.x  + topBlk.w  / 2;
+      const dist    = Math.abs(swingCX - topCX);
+      const alpha   = Math.max(0, 1 - dist / 80) * 0.3;
+      if (alpha < 0.01) return;
+
+      const swingY = getTowerTopY() - BLOCK_H * 1.8;
+      const topY   = getTowerTopY() - BLOCK_H;
+
+      ctx.save();
+      ctx.globalAlpha  = alpha;
+      ctx.strokeStyle  = '#ffd166';
+      ctx.lineWidth    = 1;
+      ctx.setLineDash  ([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(swingCX, swingY + BLOCK_H);
+      ctx.lineTo(topCX,  topY);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /* ══════════════════════════════════════════
+       啟動
+    ══════════════════════════════════════════ */
+    renderLeaderboard();
+    document.getElementById('hud-best').textContent = getBest();
+    requestAnimationFrame(loop);
+
+  })();
+  </script>
 </body>
 </html>
