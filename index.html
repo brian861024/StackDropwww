@@ -232,6 +232,50 @@
       z-index: 30;
     }
 
+    /* 道具橫幅 */
+    #item-banner {
+      position: fixed;
+      bottom: 140px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      text-align: center;
+      pointer-events: none;
+      z-index: 34;
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s;
+      background: rgba(10,10,18,0.82);
+      border-radius: 16px;
+      padding: 12px 28px 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(8px);
+      min-width: 180px;
+    }
+    #item-banner.item-show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      transition: opacity 0.18s cubic-bezier(0.34,1.56,0.64,1),
+                  transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    #item-banner.item-hidden {
+      opacity: 0;
+      transform: translateX(-50%) translateY(16px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .ib-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 4px;
+    }
+    .ib-name {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-shadow: 0 0 18px currentColor;
+    }
+
     /* 升級橫幅 */
     #level-banner {
       position: fixed;
@@ -301,6 +345,7 @@
   <div id="perfect-text">PERFECT!</div>
   <div id="chop-text"></div>
   <div id="level-banner" class="lb-hidden"></div>
+  <div id="item-banner" class="item-hidden"></div>
 
   <!-- 排行榜 -->
   <div id="leaderboard-panel">
@@ -338,7 +383,7 @@
     // 第1→2關 +1.0，第2→3關 +1.0，第3→4關 +1.5，第4→5關 +2.0，之後每關再+0.5
     const SWING_MAX        = 999;      // 不設上限，讓它飛
     const LEVEL_EVERY      = 4;        // 每幾塊升一關
-    const PERFECT_THRESH   = 2;        // 完美判定（px，極緊）
+    const PERFECT_THRESH   = 6;        // 完美判定（px，極緊）
     const DROP_SPEED       = 38;       // 積木掉落速度
     const MIN_W            = 14;       // 最小寬度
     const TOWER_VISIBLE    = 60;       // 足夠大，由攝影機控制可見範圍
@@ -426,10 +471,35 @@
     let comboTimer = 0;
 
     // 升級特效
-    let levelUpFlash   = 0;   // flash 剩餘幀數
-    let levelUpRings   = [];  // 擴散圓環
-    let levelUpBanners = [];  // 橫幅文字粒子
-    let prevLevel      = 1;   // 上一幀的 level，用於偵測升級
+    let levelUpFlash   = 0;
+    let levelUpRings   = [];
+    let levelUpBanners = [];
+    let prevLevel      = 1;
+
+    // ── 道具系統 ──
+    let pendingItem    = null;  // 待顯示的道具 { type, label, color }
+    let activeItem     = null;  // 本塊生效的道具
+    let consecutivePerf = 0;   // 連續 PERFECT 計數（每次 PERFECT +1，非PERFECT 歸0）
+    let perfectFreezeCount = 0; // PERFECT 免升關計數（還剩幾塊不計入關卡進度）
+
+    // 道具抽獎表
+    const ITEM_TABLE = [
+      { type:'extend',  label:'加長 ×1.2', color:'#06D6A0', weight:35, mult:1.2 },
+      { type:'score15', label:'分數 ×1.5',  color:'#FFD166', weight:28, mult:1.5 },
+      { type:'score18', label:'分數 ×1.8',  color:'#FF8E53', weight:18, mult:1.8 },
+      { type:'score20', label:'分數 ×2.0',  color:'#FF6B6B', weight:9,  mult:2.0 },
+      { type:'restore', label:'回復寬度',   color:'#A78BFA', weight:10 },
+    ];
+
+    function rollItem() {
+      const total = ITEM_TABLE.reduce((s,i) => s + i.weight, 0);
+      let r = Math.random() * total;
+      for (const item of ITEM_TABLE) {
+        r -= item.weight;
+        if (r <= 0) return item;
+      }
+      return ITEM_TABLE[0];
+    }
 
     /* ══════════════════════════════════════════
        初始化一局
@@ -449,7 +519,12 @@
       levelUpFlash = 0;
       levelUpRings = [];
       prevLevel    = 1;
-      document.getElementById('level-banner').className = 'lb-hidden';
+      pendingItem  = null;
+      activeItem   = null;
+      consecutivePerf  = 0;
+      perfectFreezeCount = 0;
+      document.getElementById('level-banner').className  = 'lb-hidden';
+      document.getElementById('item-banner').className   = 'item-hidden';
 
       // 底座：固定、稍寬
       const baseW = INIT_W + 40;
@@ -530,22 +605,42 @@
       const isPerfect = Math.abs(sx - tx) <= PERFECT_THRESH && Math.abs((sx+sw) - (tx+tw)) <= PERFECT_THRESH;
 
       let newX, newW;
+
+      // 套用待用道具
+      activeItem = pendingItem;
+      pendingItem = null;
+      if (activeItem) hideItemBanner();
+
       if (isPerfect) {
-        // 完美：保持上層寬度
-        newX  = tx;
-        newW  = tw;
+        newX = tx;
+        newW = tw;
         combo++;
-        perfectCombo++;
-        score += 10 + combo * 3;
-        showPerfect();
-        spawnParticles(newX + newW/2, getTowerTopY() - BLOCK_H, COLORS[swing.colorIdx], 20);
+        consecutivePerf++;
+        perfectFreezeCount++;  // 這塊不計入升關
+
+        // 分數：基礎10 + combo加乘 + 道具倍率
+        const basePt   = 10 + combo * 3;
+        const scoreMult = (activeItem && activeItem.mult) ? activeItem.mult : 1;
+        score += Math.round(basePt * scoreMult);
+
+        showPerfect(combo, scoreMult > 1 ? scoreMult : null);
+        spawnParticles(newX + newW/2, getTowerTopY() - BLOCK_H, COLORS[swing.colorIdx], 24);
+
+        // 連續2次 PERFECT → 抽道具
+        if (consecutivePerf >= 2 && consecutivePerf % 2 === 0) {
+          pendingItem = rollItem();
+          showItemBanner(pendingItem);
+        }
       } else {
-        newX  = overlapLeft;
-        newW  = overlap;
+        newX = overlapLeft;
+        newW = overlap;
         combo = 0;
-        perfectCombo = 0;
-        score += 10;
-        // 切掉的碎塊
+        consecutivePerf = 0;
+
+        const basePt    = 10;
+        const scoreMult = (activeItem && activeItem.mult) ? activeItem.mult : 1;
+        score += Math.round(basePt * scoreMult);
+
         if (sx < tx) {
           spawnDebris(sx, sw - overlap, swing.colorIdx, getTowerTopY() - BLOCK_H, 'left');
           showChop(`-${Math.round(sw - overlap)}px`);
@@ -556,11 +651,27 @@
         spawnParticles(newX + newW/2, getTowerTopY() - BLOCK_H, COLORS[swing.colorIdx], 8);
       }
 
+      // 道具效果：加長 / 回復寬度
+      if (activeItem) {
+        if (activeItem.type === 'extend') {
+          newW = Math.min(newW * 1.2, INIT_W + 40);
+          newX = newX + (isPerfect ? 0 : Math.min(newX - tx, 0));
+          // 讓積木置中
+          const prevCX = tx + tw / 2;
+          newX = prevCX - newW / 2;
+        } else if (activeItem.type === 'restore' && tower.length >= 2) {
+          const prev2 = tower[tower.length - 2];
+          newW = prev2.w;
+          const prevCX = tx + tw / 2;
+          newX = prevCX - newW / 2;
+        }
+      }
+
       // 落定的積木
       falling = {
         x: newX, w: newW,
         colorIdx: swing.colorIdx,
-        y: getTowerTopY() - BLOCK_H * 1.5,  // 從稍高處落下
+        y: getTowerTopY() - BLOCK_H * 1.5,
         targetY: getTowerTopY() - BLOCK_H,
         isPerfect,
       };
@@ -571,8 +682,10 @@
         setTimeout(() => endGame('積木太小了！'), 400);
       }
 
-      // 更新 level，偵測升級
-      const newLevel = Math.floor(tower.length / LEVEL_EVERY) + 1;
+      // 更新 level：PERFECT 塊凍結不計入升關
+      let effectiveLen = tower.length - perfectFreezeCount;
+      if (effectiveLen < 0) effectiveLen = 0;
+      const newLevel = Math.floor(effectiveLen / LEVEL_EVERY) + 1;
       if (newLevel > level) {
         level = newLevel;
         triggerLevelUp(level);
@@ -729,8 +842,10 @@
        文字提示
     ══════════════════════════════════════════ */
     let perfectTimer;
-    function showPerfect() {
+    function showPerfect(combo, mult) {
       const el = document.getElementById('perfect-text');
+      el.textContent = mult ? `PERFECT  ×${mult}` : (combo >= 3 ? `PERFECT  ${combo}🔥` : 'PERFECT!');
+      el.style.color = mult ? '#ff8e53' : (combo >= 3 ? '#ffd166' : '#ffd166');
       el.style.opacity = '1';
       el.style.transform = 'translate(-50%, -50%) scale(1.3)';
       el.style.transition = 'none';
@@ -740,6 +855,23 @@
       });
       clearTimeout(perfectTimer);
       perfectTimer = setTimeout(() => { el.style.opacity = '0'; }, 900);
+    }
+
+    // ── 道具橫幅 ──
+    let itemBannerTimer;
+    function showItemBanner(item) {
+      const el = document.getElementById('item-banner');
+      el.innerHTML = `<div class="ib-label">道具獲得</div><div class="ib-name" style="color:${item.color}">${item.label}</div>`;
+      el.classList.remove('item-hidden');
+      el.classList.add('item-show');
+      clearTimeout(itemBannerTimer);
+      // 持續顯示直到下一塊疊上（由 drop() 呼叫 hideItemBanner 清除）
+    }
+    function hideItemBanner() {
+      const el = document.getElementById('item-banner');
+      el.classList.remove('item-show');
+      el.classList.add('item-hidden');
+      clearTimeout(itemBannerTimer);
     }
 
     let chopTimer;
